@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Slug e SEO em Tempo Real</title>
+    <meta name="author" content="Onivaldo Miquelino">          
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: ui-sans-serif, system-ui; }
+        .status-badge { transition: opacity 0.3s; }
+        .bg-success { background-color: #d1fae5; color: #065f46; } /* Verde */
+        .bg-warning { background-color: #fffbeb; color: #b45309; } /* Amarelo */
+        .bg-error { background-color: #fee2e2; color: #991b1b; } /* Vermelho */
+        .bg-info { background-color: #e0f2f1; color: #0f766e; } /* Azul/Ciano */
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 flex justify-center">
+
+    <div class="w-full max-w-3xl bg-white p-8 rounded-xl shadow-2xl">
+        <h1 class="text-3xl font-bold text-center text-indigo-700 mb-6">Analisador de Título e Slug em Tempo Real</h1>
+        
+        <div class="mb-6">
+            <label for="titleInput" class="block text-lg font-medium text-gray-700 mb-2">Título do Artigo:</label>
+            <input type="text" id="titleInput" placeholder="Ex: Por Que o PHP é a Melhor Escolha para Sua Aplicação?"
+                   class="w-full border-2 border-gray-300 focus:border-indigo-500 rounded-lg p-3 text-xl transition duration-150"
+                   maxlength="150">
+            <p id="charCount" class="text-sm text-gray-500 mt-1 text-right">0/150 caracteres</p>
+        </div>
+
+        <div class="mb-8 p-4 bg-gray-50 rounded-lg border">
+            <label class="block text-md font-medium text-gray-700 mb-2">Slug para URL:</label>
+            <p id="slugOutput" class="font-mono text-lg text-green-700 break-words">
+                <span class="text-gray-400">Aguardando título...</span>
+            </p>
+        </div>
+        
+        <div class="p-6 border border-indigo-200 rounded-lg">
+            <h2 class="text-xl font-semibold text-gray-800 mb-3">Feedback de SEO (Backend PHP)</h2>
+            <div id="seoFeedback" class="space-y-3">
+                <p class="text-gray-500">O feedback será exibido aqui assim que você começar a digitar.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ******************************************************************************
+        // ATENÇÃO: Mude esta URL para o caminho correto do seu arquivo api.php no servidor
+        // ******************************************************************************
+        //const API_URL = 'http://localhost:8001/src/api.php'; 
+        const API_URL = 'api.php'; 
+
+        const titleInput = document.getElementById('titleInput');
+        const slugOutput = document.getElementById('slugOutput');
+        const charCount = document.getElementById('charCount');
+        const seoFeedback = document.getElementById('seoFeedback');
+        
+        // --- Implementação do DEBOUNCE ---
+        // Garante que a função 'processTitle' só seja chamada 500ms após o usuário parar de digitar.
+        let debounceTimer;
+        const DEBOUNCE_DELAY = 500; // Milissegundos
+
+        titleInput.addEventListener('input', () => {
+            const title = titleInput.value;
+            charCount.textContent = `${title.length}/${titleInput.maxLength} caracteres`;
+            
+            // Limpa o timer anterior (a cada nova tecla)
+            clearTimeout(debounceTimer);
+            
+            // Configura um novo timer
+            debounceTimer = setTimeout(() => {
+                processTitle(title);
+            }, DEBOUNCE_DELAY);
+        });
+
+        // --- Funções Principais ---
+        
+        async function processTitle(title) {
+            
+            // Exibe status de processamento imediato
+            slugOutput.innerHTML = '<span class="text-gray-400">Processando...</span>';
+            seoFeedback.innerHTML = '<p class="text-gray-400">Aguardando resposta do PHP...</p>';
+
+            // Se o campo estiver vazio, não faz a requisição, apenas limpa
+            if (title.trim() === '') {
+                slugOutput.innerHTML = '<span class="text-gray-400">Aguardando título...</span>';
+                seoFeedback.innerHTML = '<p class="text-gray-500">O feedback será exibido aqui assim que você começar a digitar.</p>';
+                return;
+            }
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    // Envia o título como um objeto JSON no corpo da requisição
+                    body: JSON.stringify({ title: title }) 
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    // 1. Atualiza o Slug
+                    slugOutput.textContent = result.slug;
+                    slugOutput.classList.remove('text-gray-400', 'text-red-700');
+                    slugOutput.classList.add('text-green-700');
+
+                    // 2. Renderiza o Feedback de SEO
+                    renderFeedback(result.seo_feedback);
+                    
+                } else {
+                    // Trata falhas de lógica ou erros 500
+                    slugOutput.textContent = 'ERRO';
+                    slugOutput.classList.remove('text-green-700');
+                    slugOutput.classList.add('text-red-700');
+                    
+                    renderFeedback(result.seo_feedback || [{status: 'error', message: 'Falha na comunicação com o backend PHP.'}]);
+                }
+            } catch (error) {
+                // Trata falhas de rede
+                slugOutput.textContent = 'ERRO DE REDE';
+                slugOutput.classList.add('text-red-700');
+                seoFeedback.innerHTML = `<p class="p-2 bg-error rounded status-badge">Erro de rede: ${error.message}</p>`;
+            }
+        }
+
+        function renderFeedback(feedbackArray) {
+            seoFeedback.innerHTML = ''; // Limpa o conteúdo anterior
+
+            feedbackArray.forEach(item => {
+                let badgeClass = '';
+                
+                // Define a classe CSS de acordo com o status retornado pelo PHP
+                switch (item.status) {
+                    case 'success':
+                        badgeClass = 'bg-success';
+                        break;
+                    case 'warning':
+                        badgeClass = 'bg-warning';
+                        break;
+                    case 'error':
+                        badgeClass = 'bg-error';
+                        break;
+                    case 'info':
+                    default:
+                        badgeClass = 'bg-info';
+                        break;
+                }
+
+                const icon = getIcon(item.status);
+
+                seoFeedback.innerHTML += `
+                    <div class="p-2 rounded status-badge ${badgeClass} flex items-center">
+                        <span class="mr-2 text-xl">${icon}</span>
+                        ${item.message}
+                    </div>
+                `;
+            });
+        }
+        
+        function getIcon(status) {
+            switch(status) {
+                case 'success': return '✅';
+                case 'warning': return '⚠️';
+                case 'error': return '❌';
+                case 'info': return 'ℹ️';
+                default: return '➡️';
+            }
+        }
+
+        // Inicializa o contador
+        titleInput.dispatchEvent(new Event('input'));
+    </script>
+</body>
+</html>
