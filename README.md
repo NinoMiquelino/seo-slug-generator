@@ -47,7 +47,7 @@ Este projeto demonstra a colaboração eficiente entre o backend PHP (para lógi
 ## 🧩 Estrutura do Projeto
 
 ```
-unit-converter-php/
+seo-slug-generator/
 ├── index.html
 ├── api.php
 ├── README.md
